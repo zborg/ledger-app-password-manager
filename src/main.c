@@ -62,6 +62,7 @@ typedef struct internalStorage_t {
 #define STORAGE_MAGIC 0xDEAD1337
     uint32_t magic;
     uint32_t keyboard_layout;
+    uint32_t return_key;
     /**
      * A metadata in memory is represented by 1 byte of size (l), 1 byte of type (to disable it if required), 1 byte to select char sets, l bytes of user seed
      */
@@ -77,6 +78,7 @@ static const uint8_t EMPTY_REPORT[] =       {0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 static const uint8_t SPACE_REPORT[] =       {0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x00};
 static const uint8_t CAPS_REPORT[] =        {0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 static const uint8_t CAPS_LOCK_REPORT[] =   {0x00, 0x00, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const uint8_t CARRIAGE_RETURN[] =    {0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 volatile unsigned int G_led_status;
 
@@ -186,6 +188,10 @@ void type_password(uint8_t *data, uint32_t dataSize, uint8_t *out,
                     break;
             }
         }
+    }
+    if (N_storage.return_key == 1) {
+        io_usb_send_ep_wait(HID_EPIN_ADDR, CARRIAGE_RETURN, 8, 20);
+        io_usb_send_ep_wait(HID_EPIN_ADDR, EMPTY_REPORT, 8, 20);
     }
     // restore shift state
     if (led_status&2){
@@ -332,9 +338,26 @@ const ux_menu_entry_t menu_reset_all[] = {
 };
 
 
+void menu_settings_return(uint32_t value_key) {
+    nvm_write(&N_storage.return_key, (void*)&value_key, sizeof(uint32_t));
+    UX_MENU_DISPLAY(0, menu_settings, NULL);
+}
+
+const ux_menu_entry_t menu_settings_toggle_return[] = {
+  {NULL, menu_settings_return, 0, NULL, "No", NULL, 0, 0},
+  {NULL, menu_settings_return, 1, NULL, "Yes", NULL, 0, 0},
+  UX_MENU_END
+};
+
+void menu_settings_return_init(uint32_t ignored) {
+  UNUSED(ignored);
+  UX_MENU_DISPLAY(N_storage.return_key, menu_settings_toggle_return, NULL);
+}
+
 const ux_menu_entry_t menu_settings[] = {
   {NULL, menu_settings_layout_init, 0, NULL, "Keyboard layout", NULL, 0, 0},
   {menu_reset_all, NULL, 0, NULL, "Delete all pwds", NULL, 0, 0},
+  {NULL, menu_settings_return_init, 0, NULL, "Append newline", NULL, 0, 0},
   {menu_main, NULL, 3, &C_icon_back, "Back", NULL, 61, 40},
   UX_MENU_END
 };
